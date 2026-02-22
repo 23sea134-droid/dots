@@ -550,9 +550,9 @@ function PTVisitTracker() {
                 </div>
             </div>
 
-            {/* MAIN CONTENT: FORM + CALENDAR */}
-            <div className="main-content">
-                {/* LEFT: Form + Recent */}
+            {/* MAIN CONTENT: FORM ONLY */}
+            <div className="main-content" style={{gridTemplateColumns: '1fr'}}>
+                {/* Form + Recent */}
                 <div className="card">
                     <h2 className="card-title">Assign Tablets</h2>
                     <form onSubmit={handleSubmit}>
@@ -655,34 +655,6 @@ function PTVisitTracker() {
                             </div>
                         </>
                     )}
-                </div>
-
-                {/* RIGHT: Calendar Year Grid */}
-                <div className="card" style={{marginBottom: '2rem'}}>
-                    <h2 className="card-title">Calendar View</h2>
-                    <div className="calendar-year-grid">
-                        {MONTHS.map((month, index) => {
-                            const count = getUniquePatientsForMonth(index);
-                            return (
-                                <div key={month} className="calendar-month-card" onClick={() => openMonthView(index)}>
-                                    <div style={{
-                                        fontSize: '0.82rem', fontWeight: 800, color: 'var(--primary)',
-                                        textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.4rem',
-                                        fontFamily: 'var(--font-display)'
-                                    }}>
-                                        {month.slice(0, 3)}
-                                    </div>
-                                    <div style={{
-                                        fontSize: '1.8rem', fontWeight: 800,
-                                        color: count > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)',
-                                        lineHeight: 1, fontFamily: 'var(--font-display)', letterSpacing: '-0.03em'
-                                    }}>
-                                        {count}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
                 </div>
             </div>
 
