@@ -1,3 +1,5 @@
+const { useState, useEffect, useMemo, useCallback } = React;
+
 function PTVisitTracker() {
     const [visits, setVisits] = useState([]);
     const [regNumber, setRegNumber] = useState('');
@@ -1042,7 +1044,7 @@ function PTVisitTracker() {
                                     border: '2px solid var(--primary)',
                                     borderRadius: '8px',
                                     maxHeight: '200px',
-                                    overflowY: auto',
+                                    overflowY: 'auto',
                                     zIndex: 1000,
                                     boxShadow: 'var(--shadow-lg)',
                                     marginTop: '0.25rem'
@@ -1627,4 +1629,5 @@ function PTVisitTracker() {
     );
 }
 
-ReactDOM.render(<PTVisitTracker />, document.getElementById('root'));
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<PTVisitTracker />);
