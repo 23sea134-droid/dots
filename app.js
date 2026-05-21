@@ -13,6 +13,10 @@ const fmtShort = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short'
 const sameDay = (a, b) => { const x = new Date(a), y = new Date(b); return x.getFullYear()===y.getFullYear() && x.getMonth()===y.getMonth() && x.getDate()===y.getDate(); };
 const toDateStr = (d) => { const dt = new Date(d); const y = dt.getFullYear(); const m = String(dt.getMonth()+1).padStart(2,'0'); const day = String(dt.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; };
 
+// Safe localStorage helpers
+const safeGet = (key) => { try { return localStorage.getItem(key); } catch(e) { return null; } };
+const safeSet = (key, val) => { try { localStorage.setItem(key, val); } catch(e) {} };
+
 // Format registration number with auto-slashes
 const fmtReg = (raw) => {
     // Strip everything except alphanumeric
@@ -66,10 +70,15 @@ function PTVisitTracker() {
 
     const toastRef = useRef(null);
 
+    // Today memoized to prevent stale comparisons
+    const today = useMemo(() => {
+        const d = new Date(); d.setHours(0,0,0,0); return d;
+    }, []);
+
     // ── Load ─────────────────────────────────────────────────
     useEffect(() => {
         try {
-            const s = localStorage.getItem(STORAGE_KEY);
+            const s = safeGet(STORAGE_KEY);
             if (s) setVisitsState(hydrate(JSON.parse(s)));
         } catch(e) { console.error(e); }
     }, []);
@@ -77,7 +86,7 @@ function PTVisitTracker() {
     // ── Save ─────────────────────────────────────────────────
     const setVisits = useCallback((v) => {
         setVisitsState(v);
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(v)); } catch(e) { console.error(e); }
+        safeSet(STORAGE_KEY, JSON.stringify(v));
     }, []);
 
     // ── Toast ────────────────────────────────────────────────
@@ -135,17 +144,16 @@ function PTVisitTracker() {
         return visits.filter(v => sameDay(v.nextVisitDate, date));
     }, [visits]);
 
-    const today = new Date(); today.setHours(0,0,0,0);
-
-    const todayVisits = useMemo(() => visits.filter(v => sameDay(v.nextVisitDate, today)), [visits]);
+    const todayVisits = useMemo(() => visits.filter(v => sameDay(v.nextVisitDate, today)), [visits, today]);
     const pendingToday = useMemo(() => new Set(todayVisits.filter(v=>!v.completed).map(v=>v.regNumber.trim().toUpperCase())).size, [todayVisits]);
     const doneToday = useMemo(() => new Set(todayVisits.filter(v=>v.completed).map(v=>v.regNumber.trim().toUpperCase())).size, [todayVisits]);
 
-    // 7 days strip
+    // 7 days strip - fixed to use byDate directly
     const sevenDays = useMemo(() => Array.from({length:7},(_,i)=>{
         const d = new Date(today); d.setDate(today.getDate()+i);
-        return { date:d, num:d.getDate(), name: i===0?'Today':d.toLocaleDateString('en-US',{weekday:'short'}), count:countForDate(d), isToday:i===0 };
-    }), [byDate]);
+        const count = byDate[d.toDateString()] || 0;
+        return { date:d, num:d.getDate(), name: i===0?'Today':d.toLocaleDateString('en-US',{weekday:'short'}), count, isToday:i===0 };
+    }), [byDate, today]);
 
     // Mini calendar
     const curMonth = new Date().getMonth();
@@ -161,7 +169,7 @@ function PTVisitTracker() {
             cells.push({ day:d, date, count:countForDate(date), isToday:date.getTime()===today.getTime(), isSun:date.getDay()===0, isPoya:h?.type==='poya', hol:h });
         }
         return cells;
-    }, [visits, curMonth, curYear]);
+    }, [visits, curMonth, curYear, today]);
 
     const getMonthViewDays = useCallback((month) => {
         const year = curYear;
@@ -175,7 +183,7 @@ function PTVisitTracker() {
             days.push({ date, day:d, dayName:date.toLocaleDateString('en-US',{weekday:'short'}), count:new Set(pending.map(v=>v.regNumber.trim().toUpperCase())).size, hol:h, isToday:date.getTime()===today.getTime(), isSun:date.getDay()===0 });
         }
         return { days, firstDOW: first };
-    }, [visits]);
+    }, [visits, curYear, today]);
 
     // Autocomplete suggestions
     const regSuggestions = useMemo(() => {
@@ -218,10 +226,12 @@ function PTVisitTracker() {
     const deletePatient = (reg) => {
         if(confirm(`Delete all data for ${reg}?`)) {
             setVisits(visits.filter(v=>v.regNumber.trim().toUpperCase()!==reg.trim().toUpperCase()));
+            setShowHistory(false);
+            setSelPatient(null);
             showToast('Patient deleted','info');
         }
     };
-    const clearAll = () => { if(confirm('Delete ALL data?')) { if(confirm('Cannot be undone. Continue?')) { setVisits([]); localStorage.removeItem(STORAGE_KEY); showToast('Cleared','info'); }}};
+    const clearAll = () => { if(confirm('Delete ALL data?')) { if(confirm('Cannot be undone. Continue?')) { setVisits([]); safeSet(STORAGE_KEY, null); showToast('Cleared','info'); }}};
 
     const exportData = () => {
         const b = new Blob([JSON.stringify(visits,null,2)],{type:'application/json'});
@@ -248,15 +258,9 @@ function PTVisitTracker() {
 
     // ── Reg input handler — fix: handle backspace properly ───
     const handleRegChange = (e) => {
-        const rawValue = e.target.value;
-        const cursorPos = e.target.selectionStart;
-        
-        // Strip all non-alphanumeric to get raw chars
-        const strippedRaw = rawValue.replace(/[^a-zA-Z0-9]/g, '');
-        const formatted = fmtReg(strippedRaw);
-        
-        setReg(formatted);
-        setRegSuggest(formatted.length > 0);
+        const raw = e.target.value.replace(/[^a-zA-Z0-9]/g, '');
+        setReg(fmtReg(raw));
+        setRegSuggest(raw.length > 0);
     };
 
     // ── Autocomplete ─────────────────────────────────────────
@@ -713,7 +717,7 @@ function PTVisitTracker() {
                         </div>
                         <div style={{marginTop:'0.9rem',textAlign:'center',padding:'1rem',background:'var(--teal-dim)',border:'1px solid var(--teal-border)',borderRadius:'var(--radius-sm)'}}>
                             <div style={{fontSize:'0.6rem',color:'var(--teal)',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:'0.3rem',fontFamily:'var(--font-m)'}}>Total Patients</div>
-                            <div style={{fontFamily:'var(--font-d)',fontSize:'3rem',color:'var(--teal)',lineHeight:1,textShadow:'0 0 20px rgba(0,229,196,0.4)'}}>{totalUnique}</div>
+                            <div style={{fontFamily:'var(--font-d)',fontSize:'3rem',color:'var(--teal)',lineHeight:1,textShadow:'0 0 20px rgba(74,222,128,0.4)'}}>{totalUnique}</div>
                         </div>
                     </div>
                 </div>
